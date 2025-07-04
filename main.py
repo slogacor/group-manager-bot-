@@ -1,7 +1,6 @@
 import os
 import asyncio
 from datetime import datetime, timedelta
-
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -47,9 +46,8 @@ async def kick_old_members(app):
         except Exception as e:
             print(f"❌ Gagal kick {user_id}: {e}")
 
-async def run_bot():
+async def main():
     print("🤖 Bot Group Manager aktif!")
-
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -59,8 +57,12 @@ async def run_bot():
     scheduler.add_job(lambda: asyncio.create_task(kick_old_members(app)), "interval", minutes=1)
     scheduler.start()
 
-    await app.run_polling()  # ✅ ini yang benar
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.wait_until_closed()
 
-# 👇 Jalankan langsung
-if __name__ == "__main__":
-    asyncio.run(run_bot())
+# Jangan pakai asyncio.run()
+loop = asyncio.get_event_loop()
+loop.create_task(main())
+loop.run_forever()
