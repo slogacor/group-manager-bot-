@@ -93,4 +93,23 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import asyncio
+    import sys
+
+    async def runner():
+        await main()
+
+    try:
+        # Jalankan main tanpa asyncio.run agar tidak error event loop
+        asyncio.get_event_loop().run_until_complete(runner())
+    except RuntimeError as e:
+        # Jika event loop sudah berjalan, langsung jalankan main tanpa run_until_complete
+        if "already running" in str(e):
+            import nest_asyncio
+            nest_asyncio.apply()
+            asyncio.create_task(runner())
+            # Karena aplikasi polling tidak berhenti sendiri,
+            # blokir thread utama sampai app selesai
+            asyncio.get_event_loop().run_forever()
+        else:
+            raise
