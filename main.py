@@ -17,6 +17,42 @@ OWNER_ID = 1305881282
 invited_data_file = "invited_users.json"
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxCwh7MjRs-i7cEWkVqYOpZprK7q3PjFX_p0MH5-FyVHXoqlvSJVPP7JiU4TmVzJXdnjA/exec"
 
+# --- Tambahan Data Tetap ---
+HARDCODED_USERS = {
+    "7216866087": {
+        "username": "Onlyykiaa4",
+        "first_name": "Only",
+        "join_time": "2025-07-04T11:19:34.274170+00:00",
+        "invited_by": "",
+        "via_link": True,
+        "out_time": ""
+    },
+    "6656314040": {
+        "username": "Hainekenz",
+        "first_name": "Hainekenz",
+        "join_time": "2025-07-04T11:28:40.724792+00:00",
+        "invited_by": 1305881282,
+        "via_link": False,
+        "out_time": ""
+    },
+    "8114552558": {
+        "username": "OnePercentWeeklyBot",
+        "first_name": "BTCUSDONEPERCENT_BOT",
+        "join_time": "2025-07-04T11:45:11.294009+00:00",
+        "invited_by": 1305881282,
+        "via_link": False,
+        "out_time": ""
+    },
+    "7678173969": {
+        "username": "ONEPercentXauusDbot",
+        "first_name": "XAUUSDONEPERCENT_BOT",
+        "join_time": "2025-07-04T12:06:17.522355+00:00",
+        "invited_by": 1305881282,
+        "via_link": False,
+        "out_time": ""
+    }
+}
+
 # --- Fungsi utilitas lokal ---
 def load_data():
     try:
@@ -28,6 +64,18 @@ def load_data():
 def save_data(data):
     with open(invited_data_file, "w") as f:
         json.dump(data, f, indent=2)
+
+# --- Inject hardcoded users ke file ---
+def inject_hardcoded_users():
+    data = load_data()
+    updated = False
+    for uid, info in HARDCODED_USERS.items():
+        if uid not in data:
+            data[uid] = info
+            updated = True
+    if updated:
+        save_data(data)
+        print("[INIT] Hardcoded users ditambahkan ke database lokal.")
 
 # --- Google Sheet ---
 def send_to_google_sheet(user_data: dict):
@@ -159,6 +207,7 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # --- Main Bot Function ---
 async def main():
     fetch_data_from_sheet()
+    inject_hardcoded_users()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
