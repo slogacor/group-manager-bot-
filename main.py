@@ -91,5 +91,14 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    import os
+    TOKEN = os.getenv("BOT_TOKEN")
+    from telegram.ext import ApplicationBuilder
+
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    # Tambahkan handler sesuai botmu
+    # misalnya app.add_handler(...)
+
+    print("🤖 Bot Group Manager aktif!")
+    app.run_polling()  # Jangan pakai asyncio.run()
