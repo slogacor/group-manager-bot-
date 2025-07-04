@@ -11,7 +11,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 
 # --- Konstanta ---
-BOT_TOKEN = BOT_TOKEN = "8196752676:AAH-EIup-MapoKDl5ayylgfqPk6EQeMti-c"
+BOT_TOKEN = "8196752676:AAH-EIup-MapoKDl5ayylgfqPk6EQeMti-c"
 GROUP_ID = -1002883903673
 OWNER_ID = 1305881282
 invited_data_file = "invited_users.json"
@@ -45,6 +45,17 @@ def delete_from_google_sheet(user_id):
         print(f"[SHEET] Data user {user_id} dihapus.")
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Gagal hapus dari Google Sheet: {e}")
+
+# --- Fungsi baru: Ambil data dari Google Sheet dan simpan lokal ---
+def fetch_data_from_sheet():
+    try:
+        response = requests.get(GOOGLE_SHEET_URL)
+        response.raise_for_status()
+        data = response.json()
+        save_data(data)
+        print("[INFO] Data berhasil diambil dari Google Sheet dan disimpan ke file lokal.")
+    except Exception as e:
+        print(f"[ERROR] Gagal ambil data dari Google Sheet: {e}")
 
 # --- Event: User Baru Masuk ---
 async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -138,6 +149,9 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- Main Program ---
 async def main():
+    # Ambil data Google Sheet dulu saat start bot
+    fetch_data_from_sheet()
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
