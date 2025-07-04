@@ -1,1 +1,7 @@
-{}
+{
+  "john_doe": {
+    "username": "john_doe",
+    "user_id": 123456789,
+    "join_time": "2025-07-04T15:21:32.123456"
+  }
+}
