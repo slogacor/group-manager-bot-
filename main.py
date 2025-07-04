@@ -95,9 +95,10 @@ if __name__ == "__main__":
     import asyncio
 
     try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        # Jika loop sudah berjalan (seperti di Railway), gunakan cara alternatif
         loop = asyncio.get_event_loop()
-        loop.create_task(main())
-        loop.run_forever()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    loop.create_task(main())
+    loop.run_forever()
