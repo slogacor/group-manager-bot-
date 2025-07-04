@@ -1,5 +1,6 @@
-# Tambahkan di bagian import
-from telegram import Update, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import (
+    Update, ChatMemberUpdated, InlineKeyboardMarkup, InlineKeyboardButton
+)
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes,
     ChatMemberHandler, CallbackQueryHandler
@@ -10,8 +11,9 @@ import json
 import os
 
 JSON_FILE = "verified_users.json"
-PENDING = {}
+PENDING = {}  # User yang menunggu verifikasi
 
+# Load data
 def load_verified():
     if os.path.exists(JSON_FILE):
         try:
@@ -21,17 +23,18 @@ def load_verified():
             return {}
     return {}
 
+# Save data
 def save_verified(data):
     with open(JSON_FILE, "w") as f:
         json.dump(data, f)
 
 verified_users = load_verified()
 
-# /start
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🤖 Bot verifikasi aktif!")
 
-# Saat anggota join
+# Handle member join
 async def handle_member(update: ChatMemberUpdated, context: ContextTypes.DEFAULT_TYPE):
     member = update.chat_member
     if member.new_chat_member.status == "member":
@@ -39,24 +42,26 @@ async def handle_member(update: ChatMemberUpdated, context: ContextTypes.DEFAULT
         user_id = member.from_user.id
         full_name = member.from_user.full_name
 
+        # Kirim pesan + tombol verifikasi
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Verifikasi", callback_data=f"verify_{chat_id}_{user_id}")]
         ])
-
         msg = await context.bot.send_message(
             chat_id,
-            text=f"Halo {full_name}, klik tombol verifikasi di bawah ini dalam 2 menit.",
+            text=f"Halo {full_name}, silakan klik tombol verifikasi di bawah ini dalam 3 menit.",
             reply_markup=keyboard
         )
 
+        # Simpan data pending
         PENDING[(chat_id, user_id)] = {
             "time": datetime.now(UTC),
             "message_id": msg.message_id
         }
 
-        asyncio.create_task(schedule_verification_kick(context, chat_id, user_id, 2 * 60))  # 2 menit
+        # Mulai timer 3 menit
+        asyncio.create_task(schedule_verification_kick(context, chat_id, user_id))
 
-# Saat user klik tombol
+# Handle tombol verifikasi
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -76,31 +81,40 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_verified(verified_users)
     PENDING.pop((chat_id, user_id), None)
 
-    await query.edit_message_text("✅ Kamu berhasil diverifikasi. Tapi kamu akan dikick 10 menit lagi.")
+    await query.edit_message_text("✅ Kamu berhasil diverifikasi. Selamat bergabung!")
 
-    # Jadwalkan kick 10 menit setelah verifikasi
-    asyncio.create_task(schedule_verification_kick(context, chat_id, user_id, 10 * 60))  # 10 menit
+    # Jadwalkan kick setelah 24 jam
+    asyncio.create_task(schedule_delayed_kick(context, chat_id, user_id, 24 * 60 * 60))
 
-# Fungsi untuk jadwal kick
-async def schedule_verification_kick(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int, delay: int):
+# Kick jika tidak verifikasi dalam 3 menit
+async def schedule_verification_kick(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int):
+    await asyncio.sleep(3 * 60)  # 3 menit
+    if (chat_id, user_id) in PENDING:
+        try:
+            await context.bot.ban_chat_member(chat_id, user_id)
+            await context.bot.unban_chat_member(chat_id, user_id)
+            await context.bot.send_message(chat_id, f"👢 <a href='tg://user?id={user_id}'>User</a> dikick karena tidak verifikasi.", parse_mode="HTML")
+        except Exception as e:
+            print(f"Gagal kick user (tidak verifikasi): {e}")
+        finally:
+            PENDING.pop((chat_id, user_id), None)
+
+# Kick user setelah 24 jam walaupun sudah verifikasi
+async def schedule_delayed_kick(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int, delay: int):
     await asyncio.sleep(delay)
+    key = f"{chat_id}_{user_id}"
+    if key in verified_users:
+        try:
+            await context.bot.ban_chat_member(chat_id, user_id)
+            await context.bot.unban_chat_member(chat_id, user_id)
+            await context.bot.send_message(chat_id, f"👢 <a href='tg://user?id={user_id}'>User</a> dikick setelah 24 jam verifikasi.", parse_mode="HTML")
+        except Exception as e:
+            print(f"Gagal kick user (setelah 24 jam): {e}")
+        finally:
+            verified_users.pop(key, None)
+            save_verified(verified_users)
 
-    try:
-        await context.bot.ban_chat_member(chat_id, user_id)
-        await context.bot.unban_chat_member(chat_id, user_id)
-        await context.bot.send_message(
-            chat_id,
-            f"👢 <a href='tg://user?id={user_id}'>User</a> telah dikick setelah {delay // 60} menit.",
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        print(f"Gagal kick user {user_id}: {e}")
-    finally:
-        PENDING.pop((chat_id, user_id), None)
-        verified_users.pop(f"{chat_id}_{user_id}", None)
-        save_verified(verified_users)
-
-# /cek command
+# Cek status
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not verified_users:
         await update.message.reply_text("📭 Belum ada user yang verifikasi.")
@@ -113,7 +127,7 @@ async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(pesan)
 
-# Main
+# Jalankan bot
 if __name__ == "__main__":
     TOKEN = os.getenv("BOT_TOKEN") or "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
 
