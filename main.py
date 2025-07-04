@@ -52,17 +52,30 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     for member in update.message.new_chat_members:
         invited_by = update.message.from_user
-        if invited_by.id == OWNER_ID:
+        invite_link = update.message.invite_link
+
+        source = "unknown"
+        should_record = False
+
+        if invited_by and invited_by.id == OWNER_ID:
+            source = "direct"
+            should_record = True
+        elif invite_link and invite_link.inviter and invite_link.inviter.id == OWNER_ID:
+            source = f"invite_link: {invite_link.name or 'no_name'}"
+            should_record = True
+
+        if should_record:
             user_data = {
                 "user_id": member.id,
                 "username": member.username,
                 "first_name": member.first_name,
-                "join_time": datetime.now(timezone.utc).isoformat()
+                "join_time": datetime.now(timezone.utc).isoformat(),
+                "source": source
             }
             data[str(member.id)] = user_data
             save_data(data)
             await update.message.reply_text(
-                f"✅ @{member.username or member.first_name} telah ditambahkan ke data undangan."
+                f"✅ @{member.username or member.first_name} bergabung melalui {source} dan telah dicatat."
             )
 
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -70,7 +83,6 @@ async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
     left_member = update.message.left_chat_member
     kicked_by = update.message.from_user
 
-    # Jika user dikeluarkan oleh OWNER_ID (kamu)
     if kicked_by and kicked_by.id == OWNER_ID:
         user_id = str(left_member.id)
         if user_id in data:
