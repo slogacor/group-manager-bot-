@@ -60,7 +60,7 @@ async def main():
     await app.initialize()
     await app.start()
     await app.updater.start_polling()
-    await app.updater.wait_until_closed()
+    await app.run_polling()
 
 # Jangan pakai asyncio.run()
 loop = asyncio.get_event_loop()
