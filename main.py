@@ -41,7 +41,6 @@ async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
             creates_join_request=False
         )
 
-        # Coba dapatkan user_id dari username (jika sudah pernah dicache)
         user: User = await context.bot.get_chat(f"@{username}")
         user_id = user.id if user else None
 
@@ -52,12 +51,25 @@ async def invite(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         save_joined_users()
 
-        await update.message.reply_text(
-            f"✅ Undangan dikirim ke @{username}\n"
-            f"🔗 {link.invite_link}\n"
-            f"⏰ Akan dikeluarkan otomatis setelah 24 jam."
-        )
+        # Coba kirim DM ke user (jika mereka sudah /start bot)
+        try:
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=(
+                    f"👋 Halo @{username}!\n\n"
+                    f"Admin telah mengundangmu ke grup.\n"
+                    f"🔗 Klik link berikut untuk join:\n{link.invite_link}\n\n"
+                    f"⚠️ Link berlaku 1x dan kamu akan dikeluarkan otomatis setelah 24 jam."
+                )
+            )
+        except Exception as dm_error:
+            await update.message.reply_text(
+                f"⚠️ Tidak bisa mengirim DM ke @{username}. "
+                f"Pastikan mereka sudah memulai chat dengan bot (/start).\n\n"
+                f"📎 Link undangan: {link.invite_link}"
+            )
 
+        # Jadwalkan untuk kick setelah 24 jam
         context.job_queue.run_once(
             kick_user,
             when=timedelta(hours=24),
@@ -77,9 +89,10 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
         return
 
     user_id = data.get("user_id")
+
     if not user_id:
         try:
-            # Coba dapatkan user_id sekarang jika belum disimpan
+            # Coba ambil dari daftar admin (opsional backup)
             chat_members = await context.bot.get_chat_administrators(GROUP_ID)
             for member in chat_members:
                 if member.user.username and member.user.username.lower() == username:
