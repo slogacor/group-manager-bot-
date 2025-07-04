@@ -1,7 +1,16 @@
 {
-  "john_doe": {
-    "username": "john_doe",
+  "123456789": {
     "user_id": 123456789,
-    "join_time": "2025-07-04T15:21:32.123456"
+    "username": "john_doe",
+    "first_name": "John",
+    "join_time": "2025-07-04T13:20:15.123456+00:00",
+    "source": "direct"
+  },
+  "987654321": {
+    "user_id": 987654321,
+    "username": "linkuser",
+    "first_name": "Alice",
+    "join_time": "2025-07-04T14:02:05.987654+00:00",
+    "source": "invite_link: broadcast_link"
   }
 }
