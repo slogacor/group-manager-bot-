@@ -94,7 +94,6 @@ def delete_from_google_sheet(user_id):
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Gagal hapus dari Google Sheet: {e}")
 
-# --- Ambil data dari Google Sheet dan filter join_time kosong ---
 def fetch_data_from_sheet():
     try:
         response = requests.get(GOOGLE_SHEET_URL)
@@ -134,7 +133,7 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 + ("(via link)" if is_via_link else "(diundang oleh owner)")
             )
 
-# --- Event: User Keluar (Kicked Manual oleh OWNER) ---
+# --- Event: User Keluar (Kick Manual) ---
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     left_member = update.message.left_chat_member
@@ -155,6 +154,14 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(timezone.utc)
     to_delete = []
 
+    # Ambil daftar admin grup
+    try:
+        admins = await context.bot.get_chat_administrators(GROUP_ID)
+        admin_ids = {admin.user.id for admin in admins}
+    except Exception as e:
+        print(f"[ERROR] Gagal mengambil admin grup: {e}")
+        admin_ids = set()
+
     for user_id_str, user_data in list(data.items()):
         try:
             join_time = datetime.fromisoformat(user_data["join_time"])
@@ -164,10 +171,15 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
 
         if now - join_time > timedelta(hours=24):
             user_id = int(user_id_str)
+
+            if user_id in admin_ids:
+                print(f"[SKIP] User {user_id} adalah admin, tidak di-kick.")
+                continue
+
             try:
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
                 await context.bot.unban_chat_member(GROUP_ID, user_id)
-                print(f"[AUTO-KICK] User {user_id} di-kick otomatis.")
+                print(f"[AUTO-KICK] User {user_id} di-kick otomatis setelah 24 jam.")
                 delete_from_google_sheet(user_id)
                 to_delete.append(user_id_str)
             except Exception as e:
