@@ -5,7 +5,7 @@ from telegram.ext import (
     ContextTypes,
     ChatMemberHandler,
 )
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 import asyncio
 import json
 import os
@@ -35,7 +35,7 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
     if member.new_chat_member.status == "member":
         chat_id = str(update.chat.id)
         user_id = str(member.from_user.id)
-        join_time = datetime.now(UTC).isoformat()
+        join_time = datetime.now(timezone.utc).isoformat()
 
         if chat_id not in user_join_times:
             user_join_times[chat_id] = {}
@@ -47,11 +47,12 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
             text=f"Selamat datang {member.from_user.full_name}! Kamu akan dikick dalam 24 jam."
         )
 
+        # Schedule kick in background
         asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
 async def schedule_kick(context, chat_id, user_id, join_time_str):
-    await asyncio.sleep(24 * 60 * 60)  # Ganti ke 60 untuk testing
-    now = datetime.now(UTC)
+    await asyncio.sleep(24 * 60 * 60)  # 24 jam, ubah untuk testing misal 60 detik
+    now = datetime.now(timezone.utc)
     join_time = datetime.fromisoformat(join_time_str)
 
     if user_join_times.get(chat_id, {}).get(user_id) == join_time_str:
@@ -68,7 +69,7 @@ async def schedule_kick(context, chat_id, user_id, join_time_str):
             save_data(user_join_times)
 
 async def recheck_pending_kicks(context):
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
     for chat_id, users in list(user_join_times.items()):
         for user_id, join_time_str in list(users.items()):
             join_time = datetime.fromisoformat(join_time_str)
@@ -77,10 +78,14 @@ async def recheck_pending_kicks(context):
             if remaining <= 0:
                 await schedule_kick(context, chat_id, user_id, join_time_str)
             else:
+                # Schedule remaining kick
                 asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time_str))
 
 async def main():
-    TOKEN = "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
+    TOKEN = os.getenv("TOKEN")
+    if not TOKEN:
+        raise RuntimeError("Environment variable TOKEN belum diset!")
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -91,14 +96,5 @@ async def main():
     await app.run_polling()
 
 if __name__ == "__main__":
-    import os
-    TOKEN = os.getenv("BOT_TOKEN")
-    from telegram.ext import ApplicationBuilder
-
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    # Tambahkan handler sesuai botmu
-    # misalnya app.add_handler(...)
-
-    print("🤖 Bot Group Manager aktif!")
-    app.run_polling()  # Jangan pakai asyncio.run()
+    import asyncio
+    asyncio.run(main())
