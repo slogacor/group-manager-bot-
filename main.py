@@ -43,7 +43,7 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
         context.application.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
 async def schedule_kick(context, chat_id, user_id, join_time_str):
-    await asyncio.sleep(24 * 60 * 60)  # untuk tes bisa diganti misal 60 detik
+    await asyncio.sleep(24 * 60 * 60)  # ganti 60 detik untuk testing
     now = datetime.now(timezone.utc)
     join_time = datetime.fromisoformat(join_time_str)
 
@@ -72,10 +72,7 @@ async def recheck_pending_kicks(application):
             else:
                 application.create_task(schedule_kick(application.bot, chat_id, user_id, join_time_str))
 
-async def on_startup(application):
-    await recheck_pending_kicks(application)
-
-def main():
+async def main():
     TOKEN = os.getenv("TOKEN")
     if not TOKEN:
         raise RuntimeError("Environment variable TOKEN belum diset!")
@@ -85,11 +82,19 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatMemberHandler(handle_member_update, ChatMemberHandler.CHAT_MEMBER))
 
-    # Jalankan fungsi recheck_pending_kicks saat aplikasi siap
-    app.post_init(on_startup)
-
+    # Mulai aplikasi, tapi jangan pakai app.run_polling() langsung
+    await app.start()
     print("🤖 Bot Group Manager aktif!")
-    app.run_polling()
+
+    # Jalankan recheck_pending_kicks setelah app start
+    await recheck_pending_kicks(app)
+
+    # Mulai polling (block sampai bot berhenti)
+    await app.updater.start_polling()
+    await app.updater.idle()
 
 if __name__ == "__main__":
-    main()
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        print(f"Runtime error: {e}")
