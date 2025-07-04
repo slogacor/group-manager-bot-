@@ -93,9 +93,11 @@ async def main():
 # === Jalankan
 if __name__ == "__main__":
     import asyncio
+
     try:
         asyncio.run(main())
-    except RuntimeError:
-        import nest_asyncio
-        nest_asyncio.apply()
-        asyncio.get_event_loop().run_until_complete(main())
+    except RuntimeError as e:
+        # Jika loop sudah berjalan (seperti di Railway), gunakan cara alternatif
+        loop = asyncio.get_event_loop()
+        loop.create_task(main())
+        loop.run_forever()
