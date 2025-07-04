@@ -11,7 +11,7 @@ import requests
 from datetime import datetime, timezone, timedelta
 
 # --- Konstanta ---
-BOT_TOKEN = 8196752676:AAH-EIup-MapoKDl5ayylgfqPk6EQeMti-c"
+BOT_TOKEN = BOT_TOKEN = "8196752676:AAH-EIup-MapoKDl5ayylgfqPk6EQeMti-c"
 GROUP_ID = -1002883903673
 OWNER_ID = 1305881282
 invited_data_file = "invited_users.json"
