@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 import json, os
 
 # === Konfigurasi ===
-BOT_TOKEN = os.getenv("8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs")
-GROUP_ID = int(os.getenv("GROUP_ID", "-1002883903673"))  # ganti dengan ID grup kamu
+BOT_TOKEN = "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
+GROUP_ID = -1002883903673  # ganti sesuai ID grup kamu
 
 joined_users = {}
 
@@ -90,7 +90,7 @@ async def main():
     print("🚀 Bot aktif dan siap mengeluarkan member setelah 24 jam...")
     await app.run_polling()
 
-# === Jalankan untuk Railway
+# === Jalankan
 if __name__ == "__main__":
     import asyncio
     try:
