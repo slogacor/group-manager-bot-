@@ -7,15 +7,40 @@ from telegram.ext import (
 )
 from datetime import datetime
 import asyncio
+import json
+import os
 
-# Simpan waktu join
-user_join_times = {}
+JSON_FILE = "joined_members.json"
 
-# Perintah /start
+# Load data dari file JSON
+def load_data():
+    if os.path.exists(JSON_FILE):
+        try:
+            with open(JSON_FILE, "r") as f:
+                data = json.load(f)
+                # Ubah str datetime ke datetime object (UTC)
+                return {
+                    tuple(map(int, k.split("_"))): datetime.fromisoformat(v)
+                    for k, v in data.items()
+                }
+        except Exception:
+            return {}
+    return {}
+
+# Save data ke file JSON
+def save_data(data):
+    # Ubah key dan datetime ke string untuk JSON
+    serializable_data = {f"{k[0]}_{k[1]}": v.isoformat() for k, v in data.items()}
+    with open(JSON_FILE, "w") as f:
+        json.dump(serializable_data, f)
+
+user_join_times = load_data()
+
+# Command /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Halo! Bot Group Manager aktif.")
 
-# Saat anggota baru join
+# Handle member join
 async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.DEFAULT_TYPE):
     member = update.chat_member
     if member.new_chat_member.status == "member":
@@ -23,31 +48,35 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
         user_id = member.from_user.id
         join_time = datetime.utcnow()
         user_join_times[(chat_id, user_id)] = join_time
+        save_data(user_join_times)
 
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"Selamat datang {member.from_user.full_name}! Kamu akan dikick dalam 24 jam."
         )
 
-        # Jadwalkan kick
         asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
 # Fungsi kick setelah 24 jam
 async def schedule_kick(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int, join_time: datetime):
-    await asyncio.sleep(24 * 60 * 60)  # Bisa diganti 60 untuk testing
+    await asyncio.sleep(24 * 60 * 60)  # Ganti dengan 60 untuk testing
     now = datetime.utcnow()
 
+    # Pastikan user masih join dan join time sama
     if user_join_times.get((chat_id, user_id)) == join_time:
         try:
-            await context.bot.ban_chat_member(chat_id, user_id)
-            await context.bot.unban_chat_member(chat_id, user_id)
-            await context.bot.send_message(chat_id, f"👢 {user_id} telah dikick setelah 24 jam.")
+            # Cek apakah user masih member
+            chat_member = await context.bot.get_chat_member(chat_id, user_id)
+            if chat_member.status == "member":
+                await context.bot.ban_chat_member(chat_id, user_id)
+                await context.bot.unban_chat_member(chat_id, user_id)
+                await context.bot.send_message(chat_id, f"👢 {user_id} telah dikick setelah 24 jam.")
         except Exception as e:
             print(f"Gagal kick {user_id}: {e}")
         finally:
             user_join_times.pop((chat_id, user_id), None)
+            save_data(user_join_times)
 
-# Main entry
 if __name__ == "__main__":
     import os
 
