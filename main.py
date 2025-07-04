@@ -11,17 +11,13 @@ from telegram.ext import (
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-# Ambil token dari environment
 TOKEN = os.getenv("TOKEN")
 
-# Data member yang masuk
 member_join_times = {}
 
-# Bot balas saat /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Halo! Saya bot pengelola grup. Saya akan menghapus member setelah 24 jam.")
 
-# Simpan data saat ada member join
 async def handle_member_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_member = update.chat_member
     user = chat_member.new_chat_member.user
@@ -35,8 +31,7 @@ async def handle_member_join(update: Update, context: ContextTypes.DEFAULT_TYPE)
         }
         print(f"✅ {user.full_name} join jam {join_time}")
 
-# Fungsi untuk kick member yang lebih dari 24 jam
-async def kick_old_members():
+async def kick_old_members(app):
     now = datetime.now()
     to_kick = []
 
@@ -53,29 +48,20 @@ async def kick_old_members():
         except Exception as e:
             print(f"❌ Gagal kick {user_id}: {e}")
 
-# Inisialisasi aplikasi
-app = ApplicationBuilder().token(TOKEN).build()
-
-# Scheduler untuk kick otomatis
-scheduler = AsyncIOScheduler()
-scheduler.add_job(kick_old_members, "interval", minutes=1)
-scheduler.start()
-
-# Tambahkan handler
-app.add_handler(CommandHandler("start", start))
-app.add_handler(ChatMemberHandler(handle_member_join, ChatMemberHandler.CHAT_MEMBER))
-
-# Jalankan bot
 async def main():
     print("🤖 Bot Group Manager aktif!")
+
+    app = ApplicationBuilder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(ChatMemberHandler(handle_member_join, ChatMemberHandler.CHAT_MEMBER))
+
+    # Scheduler harus dijalankan setelah event loop aktif
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(lambda: asyncio.create_task(kick_old_members(app)), "interval", minutes=1)
+    scheduler.start()
+
     await app.run_polling()
 
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            loop.create_task(main())
-        else:
-            loop.run_until_complete(main())
-    except RuntimeError:
-        asyncio.run(main())
+    asyncio.run(main())
