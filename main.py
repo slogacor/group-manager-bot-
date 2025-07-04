@@ -87,7 +87,7 @@ async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"[INFO] Data user {user_id} dihapus oleh owner.")
             await update.message.reply_text(f"🗑️ Data user {user_id} dihapus dari database dan Sheet.")
 
-# --- Event: Kick Otomatis Setelah 1 Menit ---
+# --- Event: Kick Otomatis Setelah 24 Jam ---
 async def kick_user(context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     now = datetime.now(timezone.utc)
@@ -95,7 +95,7 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
 
     for user_id_str, user_data in data.items():
         join_time = datetime.fromisoformat(user_data["join_time"])
-        if now - join_time > timedelta(minutes=1):
+        if now - join_time > timedelta(hours=24):  # Durasi kick: 24 jam
             user_id = int(user_id_str)
             try:
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
@@ -114,7 +114,7 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
 # --- Command Tambahan ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Bot aktif. Anggota yang bergabung akan dicatat dan di-kick otomatis setelah 1 menit jika tidak diundang oleh owner."
+        "🤖 Bot aktif. Anggota yang bergabung akan dicatat dan di-kick otomatis setelah 24 jam jika tidak diundang oleh owner."
     )
 
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
