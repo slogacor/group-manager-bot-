@@ -3,17 +3,19 @@ import json
 import asyncio
 from datetime import datetime, timezone
 from telegram import Update, ChatMemberUpdated
-from telegram.ext import ApplicationBuilder, CommandHandler, ChatMemberHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, ChatMemberHandler, ContextTypes
+)
 
 JSON_FILE = "joined_members.json"
 
 def load_data():
     if os.path.exists(JSON_FILE):
-        with open(JSON_FILE, "r") as f:
-            try:
+        try:
+            with open(JSON_FILE, "r") as f:
                 return json.load(f)
-            except json.JSONDecodeError:
-                return {}
+        except json.JSONDecodeError:
+            return {}
     return {}
 
 def save_data(data):
@@ -43,10 +45,13 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
         context.application.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
 async def schedule_kick(context, chat_id, user_id, join_time_str):
-    await asyncio.sleep(24 * 60 * 60)  # ganti 60 detik untuk testing
+    # Untuk testing, bisa ganti 24*60*60 (detik) ke lebih kecil, misal 60 detik
+    await asyncio.sleep(24 * 60 * 60)
+
     now = datetime.now(timezone.utc)
     join_time = datetime.fromisoformat(join_time_str)
 
+    # Pastikan waktu join belum berubah (artinya belum dihapus/dikick)
     if user_join_times.get(chat_id, {}).get(user_id) == join_time_str:
         try:
             await context.bot.ban_chat_member(chat_id, int(user_id))
@@ -60,7 +65,7 @@ async def schedule_kick(context, chat_id, user_id, join_time_str):
                 user_join_times.pop(chat_id)
             save_data(user_join_times)
 
-async def recheck_pending_kicks(application):
+async def recheck_pending_kicks(app):
     now = datetime.now(timezone.utc)
     for chat_id, users in list(user_join_times.items()):
         for user_id, join_time_str in list(users.items()):
@@ -68,33 +73,29 @@ async def recheck_pending_kicks(application):
             elapsed = (now - join_time).total_seconds()
             remaining = (24 * 60 * 60) - elapsed
             if remaining <= 0:
-                await schedule_kick(application.bot, chat_id, user_id, join_time_str)
+                await schedule_kick(app, chat_id, user_id, join_time_str)
             else:
-                application.create_task(schedule_kick(application.bot, chat_id, user_id, join_time_str))
+                app.create_task(schedule_kick(app, chat_id, user_id, join_time_str))
 
 async def main():
     TOKEN = os.getenv("TOKEN")
     if not TOKEN:
-        raise RuntimeError("Environment variable TOKEN belum diset!")
+        raise RuntimeError("TOKEN environment variable belum diset")
 
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatMemberHandler(handle_member_update, ChatMemberHandler.CHAT_MEMBER))
 
-    # Mulai aplikasi, tapi jangan pakai app.run_polling() langsung
+    await app.initialize()   # wajib dipanggil dulu
     await app.start()
+
     print("🤖 Bot Group Manager aktif!")
 
-    # Jalankan recheck_pending_kicks setelah app start
     await recheck_pending_kicks(app)
 
-    # Mulai polling (block sampai bot berhenti)
     await app.updater.start_polling()
     await app.updater.idle()
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except RuntimeError as e:
-        print(f"Runtime error: {e}")
+    asyncio.run(main())
