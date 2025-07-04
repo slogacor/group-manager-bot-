@@ -46,14 +46,17 @@ def delete_from_google_sheet(user_id):
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Gagal hapus dari Google Sheet: {e}")
 
-# --- Fungsi baru: Ambil data dari Google Sheet dan simpan lokal ---
+# --- Ambil data dari Google Sheet dan filter join_time kosong ---
 def fetch_data_from_sheet():
     try:
         response = requests.get(GOOGLE_SHEET_URL)
         response.raise_for_status()
         data = response.json()
-        save_data(data)
-        print("[INFO] Data berhasil diambil dari Google Sheet dan disimpan ke file lokal.")
+        filtered_data = {
+            uid: info for uid, info in data.items() if info.get("join_time")
+        }
+        save_data(filtered_data)
+        print("[INFO] Data berhasil diambil dan difilter dari Google Sheet.")
     except Exception as e:
         print(f"[ERROR] Gagal ambil data dari Google Sheet: {e}")
 
@@ -83,7 +86,7 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 + ("(via link)" if is_via_link else "(diundang oleh owner)")
             )
 
-# --- Event: User Keluar (Kicked Manual) ---
+# --- Event: User Keluar (Kicked Manual oleh OWNER) ---
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     left_member = update.message.left_chat_member
@@ -104,30 +107,35 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
     now = datetime.now(timezone.utc)
     to_delete = []
 
-    for user_id_str, user_data in data.items():
-        join_time = datetime.fromisoformat(user_data["join_time"])
-        if now - join_time > timedelta(hours=24):  # Durasi kick: 24 jam
+    for user_id_str, user_data in list(data.items()):
+        try:
+            join_time = datetime.fromisoformat(user_data["join_time"])
+        except Exception as e:
+            print(f"[WARN] Format join_time invalid untuk {user_id_str}: {e}")
+            continue
+
+        if now - join_time > timedelta(hours=24):
             user_id = int(user_id_str)
             try:
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
                 await context.bot.unban_chat_member(GROUP_ID, user_id)
-                print(f"[AUTO-KICK] User {user_id} di-kick.")
+                print(f"[AUTO-KICK] User {user_id} di-kick otomatis.")
                 delete_from_google_sheet(user_id)
                 to_delete.append(user_id_str)
             except Exception as e:
                 print(f"[ERROR] Gagal kick {user_id}: {e}")
 
-    if to_delete:
-        for uid in to_delete:
-            del data[uid]
-        save_data(data)
+    for uid in to_delete:
+        del data[uid]
+    save_data(data)
 
-# --- Command Tambahan ---
+# --- Command: /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 Bot aktif. Anggota yang bergabung akan dicatat dan di-kick otomatis setelah 24 jam jika tidak diundang oleh owner."
     )
 
+# --- Command: /cek ---
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     if not data:
@@ -136,6 +144,7 @@ async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = json.dumps(data, indent=2)
     await update.message.reply_text(f"<pre>{text}</pre>", parse_mode="HTML")
 
+# --- Command: /unban <user_id> ---
 async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Gunakan perintah: /unban <user_id>")
@@ -145,11 +154,10 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.unban_chat_member(GROUP_ID, user_id)
         await update.message.reply_text(f"✅ User {user_id} berhasil di-unban.")
     except Exception as e:
-        await update.message.reply_text(f"❌ Gagal: {e}")
+        await update.message.reply_text(f"❌ Gagal unban: {e}")
 
-# --- Main Program ---
+# --- Main Bot Function ---
 async def main():
-    # Ambil data Google Sheet dulu saat start bot
     fetch_data_from_sheet()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -160,12 +168,13 @@ async def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, user_left))
 
-    # Kick otomatis tiap 60 detik
+    # Auto kick job
     app.job_queue.run_repeating(kick_user, interval=60, first=10)
 
     print("🤖 Bot Telegram aktif...")
     await app.run_polling()
 
+# --- Jalankan Program ---
 if __name__ == "__main__":
     import asyncio
     import nest_asyncio
