@@ -1,9 +1,9 @@
 import os
-from telegram import Update, ChatMemberUpdated
-from telegram.ext import ApplicationBuilder, CommandHandler, ChatMemberHandler, ContextTypes
-from datetime import datetime, timezone
 import json
 import asyncio
+from datetime import datetime, timezone
+from telegram import Update, ChatMemberUpdated
+from telegram.ext import ApplicationBuilder, CommandHandler, ChatMemberHandler, ContextTypes
 
 JSON_FILE = "joined_members.json"
 
@@ -37,14 +37,13 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
         user_join_times[chat_id][user_id] = join_time
         save_data(user_join_times)
 
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=f"Selamat datang {member.from_user.full_name}! Kamu akan dikick dalam 24 jam."
-        )
-        asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time))
+        await context.bot.send_message(chat_id=chat_id,
+            text=f"Selamat datang {member.from_user.full_name}! Kamu akan dikick dalam 24 jam.")
+
+        context.application.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
 async def schedule_kick(context, chat_id, user_id, join_time_str):
-    await asyncio.sleep(24 * 60 * 60)  # 24 jam (ubah ke 60 detik untuk testing)
+    await asyncio.sleep(24 * 60 * 60)  # untuk tes bisa diganti misal 60 detik
     now = datetime.now(timezone.utc)
     join_time = datetime.fromisoformat(join_time_str)
 
@@ -61,7 +60,7 @@ async def schedule_kick(context, chat_id, user_id, join_time_str):
                 user_join_times.pop(chat_id)
             save_data(user_join_times)
 
-async def recheck_pending_kicks(context):
+async def recheck_pending_kicks(application):
     now = datetime.now(timezone.utc)
     for chat_id, users in list(user_join_times.items()):
         for user_id, join_time_str in list(users.items()):
@@ -69,9 +68,12 @@ async def recheck_pending_kicks(context):
             elapsed = (now - join_time).total_seconds()
             remaining = (24 * 60 * 60) - elapsed
             if remaining <= 0:
-                await schedule_kick(context, chat_id, user_id, join_time_str)
+                await schedule_kick(application.bot, chat_id, user_id, join_time_str)
             else:
-                asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time_str))
+                application.create_task(schedule_kick(application.bot, chat_id, user_id, join_time_str))
+
+async def on_startup(application):
+    await recheck_pending_kicks(application)
 
 def main():
     TOKEN = os.getenv("TOKEN")
@@ -83,8 +85,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatMemberHandler(handle_member_update, ChatMemberHandler.CHAT_MEMBER))
 
-    # Jalankan recheck di background saat startup
-    asyncio.create_task(recheck_pending_kicks(app))
+    # Jalankan fungsi recheck_pending_kicks saat aplikasi siap
+    app.post_init(on_startup)
 
     print("🤖 Bot Group Manager aktif!")
     app.run_polling()
