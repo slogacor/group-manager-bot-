@@ -33,7 +33,7 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
 
     for user_id_str, user_data in data.items():
         join_time = datetime.fromisoformat(user_data["join_time"])
-        if now - join_time > timedelta(hours=24):
+        if now - join_time > timedelta(minutes=1):
             user_id = int(user_id_str)
             try:
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
