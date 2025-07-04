@@ -40,6 +40,19 @@ user_join_times = load_data()
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Halo! Bot Group Manager aktif.")
 
+# Command /cek untuk kirim isi JSON ke chat pribadi
+async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not user_join_times:
+        await update.message.reply_text("Data JSON masih kosong.")
+        return
+
+    pesan = "Data anggota yang join:\n"
+    for (chat_id, user_id), join_time in user_join_times.items():
+        pesan += f"ChatID {chat_id}, UserID {user_id}: {join_time.isoformat()}\n"
+
+    # Kirim pesan ke user yang request
+    await update.message.reply_text(pesan)
+
 # Handle member join
 async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.DEFAULT_TYPE):
     member = update.chat_member
@@ -78,13 +91,12 @@ async def schedule_kick(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_i
             save_data(user_join_times)
 
 if __name__ == "__main__":
-    import os
-
     TOKEN = os.getenv("BOT_TOKEN") or "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
 
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cek", cek))
     app.add_handler(ChatMemberHandler(handle_member_update, ChatMemberHandler.CHAT_MEMBER))
 
     print("🤖 Bot Group Manager aktif!")
