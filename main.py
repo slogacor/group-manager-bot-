@@ -1,5 +1,11 @@
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder,
+    ContextTypes,
+    MessageHandler,
+    CommandHandler,
+    filters
+)
 import json
 from datetime import datetime
 
@@ -42,10 +48,25 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ @{member.username or member.first_name} telah ditambahkan ke data undangan."
             )
 
+# /start command
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🤖 Bot siap. Aku akan mencatat anggota yang kamu undang.")
+
+# /cek command
+async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    data = load_data()
+    if not data:
+        await update.message.reply_text("📭 Belum ada data undangan.")
+        return
+    text = json.dumps(data, indent=2)
+    await update.message.reply_text(f"<pre>{text}</pre>", parse_mode="HTML")
+
 # Start Bot
 async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("cek", cek))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
 
     print("🤖 Bot aktif...")
@@ -54,4 +75,16 @@ async def main():
 # Run Async
 if __name__ == "__main__":
     import asyncio
-    asyncio.run(main())
+
+    try:
+        asyncio.run(main())
+    except RuntimeError as e:
+        # Kalau loop sudah jalan (contoh: Railway), gunakan nest_asyncio
+        if "event loop is already running" in str(e):
+            import nest_asyncio
+            nest_asyncio.apply()
+            loop = asyncio.get_event_loop()
+            loop.create_task(main())
+            loop.run_forever()
+        else:
+            raise
