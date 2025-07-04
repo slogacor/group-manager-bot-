@@ -51,31 +51,29 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
 async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     for member in update.message.new_chat_members:
-        invited_by = update.message.from_user
+        joined_by = update.message.from_user
 
-        # Coba cek apakah member masuk lewat tautan undangan
-        try:
-            invite_link = update.message.invite_link
-            via_link = invite_link.invite_link if invite_link else None
-        except AttributeError:
-            invite_link = None
-            via_link = None
+        # Jika user join sendiri (via link atau publik)
+        is_via_link = member.id == joined_by.id
 
-        # Simpan data jika diundang oleh owner atau lewat tautan
-        if invited_by and invited_by.id == OWNER_ID or invite_link:
-            user_data = {
-                "user_id": member.id,
-                "username": member.username,
-                "first_name": member.first_name,
-                "join_time": datetime.now(timezone.utc).isoformat(),
-                "invited_by": invited_by.id if invited_by else None,
-                "via_link": via_link,
-            }
+        user_data = {
+            "user_id": member.id,
+            "username": member.username,
+            "first_name": member.first_name,
+            "join_time": datetime.now(timezone.utc).isoformat(),
+            "invited_by": None if is_via_link else joined_by.id,
+            "via_link": is_via_link
+        }
+
+        # Catat hanya jika dia join lewat link atau diundang owner
+        if is_via_link or (joined_by and joined_by.id == OWNER_ID):
             data[str(member.id)] = user_data
             save_data(data)
             await update.message.reply_text(
-                f"✅ @{member.username or member.first_name} telah ditambahkan ke data undangan."
+                f"✅ @{member.username or member.first_name} telah dicatat. "
+                + ("(via link)" if is_via_link else "(diundang oleh owner)")
             )
+
 
 
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
