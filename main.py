@@ -6,7 +6,7 @@ from telegram.ext import (
 from datetime import datetime, timedelta
 import asyncio, os, json
 
-TOKEN = os.getenv("BOT_TOKEN") or "ISI_TOKEN_BOT_KAMU"
+TOKEN = os.getenv("BOT_TOKEN") or "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
 JSON_FILE = "verifikasi_data.json"
 
 # ======== JSON LOAD / SAVE ==========
