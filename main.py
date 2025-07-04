@@ -113,7 +113,7 @@ async def schedule_verification_kick(context: ContextTypes.DEFAULT_TYPE, chat_id
 
 # Jalankan bot
 if __name__ == "__main__":
-    TOKEN = os.getenv("BOT_TOKEN") or "ISI_TOKEN_KAMU_DISINI"
+    TOKEN = os.getenv("BOT_TOKEN") or "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
 
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
