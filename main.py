@@ -1,73 +1,81 @@
+import os
 import asyncio
 from datetime import datetime, timedelta
-import json
-from telegram import Update, ChatMemberUpdated
+
+from telegram import Update
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, ChatMemberHandler,
-    ContextTypes
+    ApplicationBuilder,
+    CommandHandler,
+    ChatMemberHandler,
+    ContextTypes,
 )
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-TOKEN = "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
-MEMBER_FILE = "joined_members.json"
+# Ambil token dari environment
+TOKEN = os.getenv("TOKEN")
 
-def save_member(user_id, chat_id):
-    try:
-        with open(MEMBER_FILE, "r") as f:
-            data = json.load(f)
-    except:
-        data = []
+# Data member yang masuk
+member_join_times = {}
 
-    expire = (datetime.now() + timedelta(hours=24)).isoformat()
-    data.append({"user_id": user_id, "chat_id": chat_id, "expire": expire})
-
-    with open(MEMBER_FILE, "w") as f:
-        json.dump(data, f)
-
-async def kick_old_members(app):
-    try:
-        with open(MEMBER_FILE, "r") as f:
-            data = json.load(f)
-    except:
-        return
-
-    now = datetime.now()
-    new_data = []
-    for member in data:
-        expire_time = datetime.fromisoformat(member["expire"])
-        if now >= expire_time:
-            try:
-                await app.bot.ban_chat_member(member["chat_id"], member["user_id"])
-                await app.bot.unban_chat_member(member["chat_id"], member["user_id"])
-            except Exception as e:
-                print(f"Gagal kick {member['user_id']}: {e}")
-        else:
-            new_data.append(member)
-
-    with open(MEMBER_FILE, "w") as f:
-        json.dump(new_data, f)
-
-async def member_update(update: ChatMemberUpdated, context: ContextTypes.DEFAULT_TYPE):
-    if update.chat_member.new_chat_member.status == "member":
-        user = update.chat_member.from_user
-        chat = update.chat_member.chat
-        save_member(user.id, chat.id)
-
+# Bot balas saat /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Halo! Bot ini akan otomatis mengeluarkan member setelah 24 jam. ⏰")
+    await update.message.reply_text("Halo! Saya bot pengelola grup. Saya akan menghapus member setelah 24 jam.")
 
+# Simpan data saat ada member join
+async def handle_member_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_member = update.chat_member
+    user = chat_member.new_chat_member.user
+
+    if chat_member.old_chat_member.status == "left" and chat_member.new_chat_member.status == "member":
+        member_id = user.id
+        join_time = datetime.now()
+        member_join_times[member_id] = {
+            "chat_id": chat_member.chat.id,
+            "join_time": join_time,
+        }
+        print(f"✅ {user.full_name} join jam {join_time}")
+
+# Fungsi untuk kick member yang lebih dari 24 jam
+async def kick_old_members():
+    now = datetime.now()
+    to_kick = []
+
+    for user_id, data in list(member_join_times.items()):
+        if now - data["join_time"] > timedelta(hours=24):
+            to_kick.append((user_id, data["chat_id"]))
+
+    for user_id, chat_id in to_kick:
+        try:
+            await app.bot.ban_chat_member(chat_id, user_id)
+            await app.bot.unban_chat_member(chat_id, user_id)
+            print(f"👢 Kick user {user_id} dari chat {chat_id}")
+            del member_join_times[user_id]
+        except Exception as e:
+            print(f"❌ Gagal kick {user_id}: {e}")
+
+# Inisialisasi aplikasi
+app = ApplicationBuilder().token(TOKEN).build()
+
+# Scheduler untuk kick otomatis
+scheduler = AsyncIOScheduler()
+scheduler.add_job(kick_old_members, "interval", minutes=1)
+scheduler.start()
+
+# Tambahkan handler
+app.add_handler(CommandHandler("start", start))
+app.add_handler(ChatMemberHandler(handle_member_join, ChatMemberHandler.CHAT_MEMBER))
+
+# Jalankan bot
 async def main():
-    app = ApplicationBuilder().token(TOKEN).build()
-
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(lambda: asyncio.create_task(kick_old_members(app)), 'interval', minutes=1)
-    scheduler.start()
-
-    app.add_handler(ChatMemberHandler(member_update, ChatMemberHandler.CHAT_MEMBER))
-    app.add_handler(CommandHandler("start", start))
-
     print("🤖 Bot Group Manager aktif!")
     await app.run_polling()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            loop.create_task(main())
+        else:
+            loop.run_until_complete(main())
+    except RuntimeError:
+        asyncio.run(main())
