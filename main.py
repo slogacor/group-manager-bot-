@@ -1,14 +1,9 @@
-from telegram import Update, ChatMemberUpdated
-from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    ChatMemberHandler,
-)
-from datetime import datetime, timezone
-import asyncio
-import json
 import os
+from telegram import Update, ChatMemberUpdated
+from telegram.ext import ApplicationBuilder, CommandHandler, ChatMemberHandler, ContextTypes
+from datetime import datetime, timezone
+import json
+import asyncio
 
 JSON_FILE = "joined_members.json"
 
@@ -46,12 +41,10 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
             chat_id=chat_id,
             text=f"Selamat datang {member.from_user.full_name}! Kamu akan dikick dalam 24 jam."
         )
-
-        # Schedule kick in background
         asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
 async def schedule_kick(context, chat_id, user_id, join_time_str):
-    await asyncio.sleep(24 * 60 * 60)  # 24 jam, ubah untuk testing misal 60 detik
+    await asyncio.sleep(24 * 60 * 60)  # 24 jam (ubah ke 60 detik untuk testing)
     now = datetime.now(timezone.utc)
     join_time = datetime.fromisoformat(join_time_str)
 
@@ -78,10 +71,9 @@ async def recheck_pending_kicks(context):
             if remaining <= 0:
                 await schedule_kick(context, chat_id, user_id, join_time_str)
             else:
-                # Schedule remaining kick
                 asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time_str))
 
-async def main():
+def main():
     TOKEN = os.getenv("TOKEN")
     if not TOKEN:
         raise RuntimeError("Environment variable TOKEN belum diset!")
@@ -91,10 +83,11 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatMemberHandler(handle_member_update, ChatMemberHandler.CHAT_MEMBER))
 
-    await recheck_pending_kicks(app)
+    # Jalankan recheck di background saat startup
+    asyncio.create_task(recheck_pending_kicks(app))
+
     print("🤖 Bot Group Manager aktif!")
-    await app.run_polling()
+    app.run_polling()
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
