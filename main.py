@@ -1,6 +1,3 @@
-import nest_asyncio
-nest_asyncio.apply()
-
 from telegram import Update, ChatMemberUpdated
 from telegram.ext import (
     ApplicationBuilder,
@@ -15,7 +12,6 @@ import os
 
 JSON_FILE = "joined_members.json"
 
-# Load data dari file JSON
 def load_data():
     if os.path.exists(JSON_FILE):
         with open(JSON_FILE, "r") as f:
@@ -25,19 +21,15 @@ def load_data():
                 return {}
     return {}
 
-# Simpan data ke file JSON
 def save_data(data):
     with open(JSON_FILE, "w") as f:
         json.dump(data, f)
 
-# Inisialisasi data
 user_join_times = load_data()
 
-# Perintah /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Halo! Bot Group Manager aktif.")
 
-# Saat anggota baru join
 async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.DEFAULT_TYPE):
     member = update.chat_member
     if member.new_chat_member.status == "member":
@@ -57,7 +49,6 @@ async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.
 
         asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time))
 
-# Jadwal kick
 async def schedule_kick(context, chat_id, user_id, join_time_str):
     await asyncio.sleep(24 * 60 * 60)  # Ganti ke 60 untuk testing
     now = datetime.now(UTC)
@@ -76,7 +67,6 @@ async def schedule_kick(context, chat_id, user_id, join_time_str):
                 user_join_times.pop(chat_id)
             save_data(user_join_times)
 
-# Cek kick tertunda saat restart
 async def recheck_pending_kicks(context):
     now = datetime.now(UTC)
     for chat_id, users in list(user_join_times.items()):
@@ -102,15 +92,4 @@ async def main():
 
 if __name__ == "__main__":
     import asyncio
-
-    async def runner():
-        await main()
-
-    try:
-        asyncio.get_event_loop().run_until_complete(runner())
-    except RuntimeError as e:
-        if "already running" in str(e):
-            asyncio.create_task(runner())
-            asyncio.get_event_loop().run_forever()
-        else:
-            raise
+    asyncio.run(main())
