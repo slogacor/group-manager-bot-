@@ -59,17 +59,8 @@ async def run_bot():
     scheduler.add_job(lambda: asyncio.create_task(kick_old_members(app)), "interval", minutes=1)
     scheduler.start()
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.idle()
+    await app.run_polling()  # ✅ ini yang benar
 
-# 👇 Jalan tanpa asyncio.run()
+# 👇 Jalankan langsung
 if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(run_bot())
-    except RuntimeError as e:
-        print("⚠️ Event loop sudah jalan. Mencoba alternatif run...")
-        loop = asyncio.get_running_loop()
-        loop.create_task(run_bot())
+    asyncio.run(run_bot())
