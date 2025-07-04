@@ -9,7 +9,7 @@ from telegram.ext import (
 import json
 from datetime import datetime, timezone, timedelta
 
-BOT_TOKEN = "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
+BOT_TOKEN = "YOUR_BOT_TOKEN"
 GROUP_ID = -1002883903673
 OWNER_ID = 1305881282
 
@@ -33,12 +33,12 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
 
     for user_id_str, user_data in data.items():
         join_time = datetime.fromisoformat(user_data["join_time"])
-        if now - join_time > timedelta(minutes=1):
+        if now - join_time > timedelta(minutes=1):  # KICK SETELAH 1 MENIT
             user_id = int(user_id_str)
             try:
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
                 await context.bot.unban_chat_member(GROUP_ID, user_id)
-                print(f"[INFO] User {user_id} di-kick setelah 24 jam.")
+                print(f"[INFO] User {user_id} di-kick setelah 1 menit.")
                 to_delete.append(user_id_str)
             except Exception as e:
                 print(f"[ERROR] Gagal kick user {user_id}: {e}")
@@ -52,8 +52,6 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     for member in update.message.new_chat_members:
         joined_by = update.message.from_user
-
-        # Jika user join sendiri (via link atau publik)
         is_via_link = member.id == joined_by.id
 
         user_data = {
@@ -65,7 +63,6 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "via_link": is_via_link
         }
 
-        # Catat hanya jika dia join lewat link atau diundang owner
         if is_via_link or (joined_by and joined_by.id == OWNER_ID):
             data[str(member.id)] = user_data
             save_data(data)
@@ -73,8 +70,6 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ @{member.username or member.first_name} telah dicatat. "
                 + ("(via link)" if is_via_link else "(diundang oleh owner)")
             )
-
-
 
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -94,14 +89,8 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Kirim perintah dengan user_id: /unban <user_id>")
         return
 
-    user_id_str = context.args[0]
     try:
-        user_id = int(user_id_str)
-    except ValueError:
-        await update.message.reply_text("User ID harus berupa angka.")
-        return
-
-    try:
+        user_id = int(context.args[0])
         await context.bot.unban_chat_member(GROUP_ID, user_id)
         await update.message.reply_text(f"✅ Berhasil membuka blokir user {user_id}.")
     except Exception as e:
@@ -109,7 +98,7 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Bot siap. Aku akan mencatat anggota yang kamu undang dan kick otomatis setelah 24 jam."
+        "🤖 Bot aktif. Aku akan mencatat anggota yang kamu undang dan kick otomatis setelah 1 menit."
     )
 
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -129,7 +118,8 @@ async def main():
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, user_left))
 
-    app.job_queue.run_repeating(kick_user, interval=3600, first=10)
+    # Kick setiap 60 detik
+    app.job_queue.run_repeating(kick_user, interval=60, first=10)
 
     print("🤖 Bot aktif...")
     await app.run_polling()
@@ -137,6 +127,5 @@ async def main():
 if __name__ == "__main__":
     import asyncio
     import nest_asyncio
-
     nest_asyncio.apply()
     asyncio.run(main())
