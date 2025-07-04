@@ -134,7 +134,7 @@ async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(pesan)
 
 if __name__ == "__main__":
-    TOKEN = os.getenv("BOT_TOKEN") or "ISI_TOKEN_DISINI"
+    TOKEN = os.getenv("BOT_TOKEN") or "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
 
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
