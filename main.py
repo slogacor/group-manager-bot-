@@ -1,8 +1,8 @@
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-BOT_TOKEN = "TOKEN_BOT_KAMU"
-GROUP_ID = -1001234567890  # ganti dengan ID grup kamu
+BOT_TOKEN = "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
+GROUP_ID = -1002883903673  # ganti dengan ID grup kamu
 
 async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # cek apakah ada argumen user_id atau username di command /unban
