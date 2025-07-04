@@ -12,7 +12,6 @@ from telegram.ext import (
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 TOKEN = os.getenv("TOKEN")
-
 member_join_times = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -48,7 +47,7 @@ async def kick_old_members(app):
         except Exception as e:
             print(f"❌ Gagal kick {user_id}: {e}")
 
-async def main():
+async def run_bot():
     print("🤖 Bot Group Manager aktif!")
 
     app = ApplicationBuilder().token(TOKEN).build()
@@ -56,12 +55,21 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(ChatMemberHandler(handle_member_join, ChatMemberHandler.CHAT_MEMBER))
 
-    # Scheduler harus dijalankan setelah event loop aktif
     scheduler = AsyncIOScheduler()
     scheduler.add_job(lambda: asyncio.create_task(kick_old_members(app)), "interval", minutes=1)
     scheduler.start()
 
-    await app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
 
+# 👇 Jalan tanpa asyncio.run()
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(run_bot())
+    except RuntimeError as e:
+        print("⚠️ Event loop sudah jalan. Mencoba alternatif run...")
+        loop = asyncio.get_running_loop()
+        loop.create_task(run_bot())
