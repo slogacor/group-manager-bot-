@@ -1,92 +1,118 @@
-from telegram import Update, ChatMemberUpdated
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder,
-    CommandHandler,
-    ContextTypes,
-    ChatMemberHandler,
+    ApplicationBuilder, CommandHandler, CallbackQueryHandler,
+    ContextTypes, MessageHandler, filters
 )
-from datetime import datetime
-import asyncio
-import json
-import os
+from datetime import datetime, timedelta
+import asyncio, os, json
 
-JSON_FILE = "joined_members.json"
+TOKEN = os.getenv("BOT_TOKEN") or "ISI_TOKEN_BOT_KAMU"
+JSON_FILE = "verifikasi_data.json"
 
+# ======== JSON LOAD / SAVE ==========
 def load_data():
     if os.path.exists(JSON_FILE):
         try:
             with open(JSON_FILE, "r") as f:
-                data = json.load(f)
-                return {
-                    tuple(map(int, k.split("_"))): datetime.fromisoformat(v)
-                    for k, v in data.items()
-                }
-        except Exception as e:
-            print(f"Error load JSON: {e}")
+                return json.load(f)
+        except Exception:
             return {}
     return {}
 
 def save_data(data):
-    try:
-        serializable_data = {f"{k[0]}_{k[1]}": v.isoformat() for k, v in data.items()}
-        with open(JSON_FILE, "w") as f:
-            json.dump(serializable_data, f)
-        print(f"Saved data to {JSON_FILE}, entries: {len(data)}")
-    except Exception as e:
-        print(f"Error saving JSON: {e}")
+    with open(JSON_FILE, "w") as f:
+        json.dump(data, f, indent=2)
 
-user_join_times = load_data()
+user_data = load_data()
 
+# ========= VERIFIKASI ===============
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Halo! Bot Group Manager aktif.")
+    await update.message.reply_text("🤖 Bot verifikasi aktif!")
 
-async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not user_join_times:
-        await update.message.reply_text("Data JSON masih kosong.")
+async def handle_new_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    user_id = user.id
+    key = f"{chat_id}_{user_id}"
+
+    # Sudah diverifikasi
+    if key in user_data and user_data[key]["verified"]:
         return
-    pesan = "Data anggota yang join:\n"
-    for (chat_id, user_id), join_time in user_join_times.items():
-        pesan += f"ChatID {chat_id}, UserID {user_id}: {join_time.isoformat()}\n"
-    await update.message.reply_text(pesan)
 
-async def handle_member_update(update: ChatMemberUpdated, context: ContextTypes.DEFAULT_TYPE):
-    member = update.chat_member
-    if member.new_chat_member.status == "member":
-        chat_id = update.chat.id
-        user_id = member.from_user.id
-        join_time = datetime.utcnow()
-        user_join_times[(chat_id, user_id)] = join_time
-        save_data(user_join_times)
-        print(f"User {user_id} joined chat {chat_id} at {join_time.isoformat()}")
+    # Tambahkan ke data
+    if key not in user_data:
+        user_data[key] = {
+            "join_time": datetime.utcnow().isoformat(),
+            "verified": False
+        }
+        save_data(user_data)
+
+        # Kirim tombol verifikasi
+        button = InlineKeyboardMarkup.from_button(
+            InlineKeyboardButton("✅ Verifikasi Sekarang", callback_data=f"verif_{chat_id}_{user_id}")
+        )
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"Selamat datang {member.from_user.full_name}! Kamu akan dikick dalam 24 jam."
+            text=f"👋 Selamat datang {user.full_name}!\nTekan tombol di bawah ini untuk verifikasi dalam 5 menit.",
+            reply_markup=button
         )
-        asyncio.create_task(schedule_kick(context, chat_id, user_id, join_time))
+        asyncio.create_task(kick_if_not_verified(context, chat_id, user_id))
 
-async def schedule_kick(context: ContextTypes.DEFAULT_TYPE, chat_id: int, user_id: int, join_time: datetime):
-    await asyncio.sleep(24 * 60 * 60)  # 24 jam, bisa diganti 60 detik utk testing
-    if user_join_times.get((chat_id, user_id)) == join_time:
+# ========= VERIFIKASI BUTTON ===========
+async def handle_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+    if not data.startswith("verif_"):
+        return
+
+    _, chat_id, user_id = data.split("_")
+    key = f"{chat_id}_{user_id}"
+
+    if key in user_data and not user_data[key]["verified"]:
+        user_data[key]["verified"] = True
+        save_data(user_data)
+        await query.edit_message_text("✅ Verifikasi berhasil! Selamat bergabung.")
+    else:
+        await query.edit_message_text("⚠️ Verifikasi gagal atau sudah dilakukan.")
+
+# ========= KICK LOGIC ===========
+async def kick_if_not_verified(context, chat_id, user_id):
+    await asyncio.sleep(300)  # 5 menit
+    key = f"{chat_id}_{user_id}"
+    if key in user_data and not user_data[key]["verified"]:
         try:
-            chat_member = await context.bot.get_chat_member(chat_id, user_id)
-            if chat_member.status == "member":
-                await context.bot.ban_chat_member(chat_id, user_id)
-                await context.bot.unban_chat_member(chat_id, user_id)
-                await context.bot.send_message(chat_id, f"👢 {user_id} telah dikick setelah 24 jam.")
-                print(f"Kicked user {user_id} from chat {chat_id}")
+            await context.bot.ban_chat_member(chat_id, int(user_id))
+            await context.bot.unban_chat_member(chat_id, int(user_id))
+            await context.bot.send_message(chat_id, f"👢 <a href='tg://user?id={user_id}'>User</a> dikeluarkan karena tidak verifikasi.", parse_mode="HTML")
         except Exception as e:
-            print(f"Gagal kick {user_id}: {e}")
+            print(f"Gagal kick: {e}")
         finally:
-            user_join_times.pop((chat_id, user_id), None)
-            save_data(user_join_times)
+            user_data.pop(key, None)
+            save_data(user_data)
 
+# ========= CEK DATA ===========
+async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not user_data:
+        await update.message.reply_text("📂 Data kosong.")
+        return
+
+    msg = "📊 Data verifikasi:\n"
+    for k, v in user_data.items():
+        chat_id, user_id = k.split("_")
+        status = "✅" if v["verified"] else "❌"
+        msg += f"UserID {user_id} ({chat_id}): {status}\n"
+    await update.message.reply_text(msg[:4000])
+
+# ========= SETUP ===========
 if __name__ == "__main__":
-    TOKEN = os.getenv("BOT_TOKEN") or "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("cek", cek))
-    app.add_handler(ChatMemberHandler(handle_member_update, ChatMemberHandler.CHAT_MEMBER))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_new_message))
+    app.add_handler(CallbackQueryHandler(handle_button))
 
-    print("🤖 Bot Group Manager aktif!")
+    print("🤖 Bot verifikasi aktif!")
     app.run_polling()
