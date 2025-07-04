@@ -9,7 +9,7 @@ from telegram.ext import (
 import json
 from datetime import datetime, timezone, timedelta
 
-BOT_TOKEN = "YOUR_BOT_TOKEN"
+BOT_TOKEN = "8196752676:AAENfAaWctBNS6hcNNS-bdRwbz4_ntOHbFs"
 GROUP_ID = -1002883903673
 OWNER_ID = 1305881282
 
