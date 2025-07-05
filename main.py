@@ -116,7 +116,8 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "first_name": member.first_name,
             "join_time": datetime.now(timezone.utc).isoformat(),
             "invited_by": None if is_via_link else joined_by.id,
-            "via_link": is_via_link
+            "via_link": is_via_link,
+            "out_time": ""
         }
 
         if is_via_link or (joined_by and joined_by.id == OWNER_ID):
@@ -166,16 +167,14 @@ async def handle_kick_duration(update: Update, context: ContextTypes.DEFAULT_TYP
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     left_member = update.message.left_chat_member
-    kicked_by = update.message.from_user
+    user_id = str(left_member.id)
 
-    if kicked_by and kicked_by.id == OWNER_ID:
-        user_id = str(left_member.id)
-        if user_id in data:
-            del data[user_id]
-            save_data(data)
-            delete_from_google_sheet(user_id)
-            print(f"[INFO] Data user {user_id} dihapus oleh owner.")
-            await update.message.reply_text(f"🗑️ Data user {user_id} dihapus dari database dan Sheet.")
+    if user_id in data:
+        data[user_id]["out_time"] = datetime.now(timezone.utc).isoformat()
+        save_data(data)
+        send_to_google_sheet(data[user_id])
+        print(f"[INFO] User {user_id} keluar, out_time diupdate.")
+        await update.message.reply_text(f"📤 User {user_id} keluar. out_time dicatat.")
 
 async def kick_user(context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -204,7 +203,8 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
                 await context.bot.unban_chat_member(GROUP_ID, user_id)
                 print(f"[AUTO-KICK] User {user_id} di-kick otomatis.")
-                delete_from_google_sheet(user_id)
+                data[user_id_str]["out_time"] = now.isoformat()
+                send_to_google_sheet(data[user_id_str])
                 to_delete.append(user_id_str)
         except Exception as e:
             print(f"[ERROR] Gagal proses kick untuk {user_id_str}: {e}")
@@ -262,4 +262,3 @@ if __name__ == "__main__":
     nest_asyncio.apply()
     loop = asyncio.get_event_loop()
     loop.run_until_complete(main())
-
