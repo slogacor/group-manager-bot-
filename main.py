@@ -19,38 +19,7 @@ invited_data_file = "invited_users.json"
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxCwh7MjRs-i7cEWkVqYOpZprK7q3PjFX_p0MH5-FyVHXoqlvSJVPP7JiU4TmVzJXdnjA/exec"
 
 HARDCODED_USERS = {
-    "7216866087": {
-        "username": "Onlyykiaa4",
-        "first_name": "Only",
-        "join_time": "2025-07-04T11:19:34.274170+00:00",
-        "invited_by": "",
-        "via_link": True,
-        "out_time": ""
-    },
-    "6656314040": {
-        "username": "Hainekenz",
-        "first_name": "Hainekenz",
-        "join_time": "2025-07-04T11:28:40.724792+00:00",
-        "invited_by": 1305881282,
-        "via_link": False,
-        "out_time": ""
-    },
-    "8114552558": {
-        "username": "OnePercentWeeklyBot",
-        "first_name": "BTCUSDONEPERCENT_BOT",
-        "join_time": "2025-07-04T11:45:11.294009+00:00",
-        "invited_by": 1305881282,
-        "via_link": False,
-        "out_time": ""
-    },
-    "7678173969": {
-        "username": "ONEPercentXauusDbot",
-        "first_name": "XAUUSDONEPERCENT_BOT",
-        "join_time": "2025-07-04T12:06:17.522355+00:00",
-        "invited_by": 1305881282,
-        "via_link": False,
-        "out_time": ""
-    }
+    # tetap kosong atau bisa diisi manual jika perlu
 }
 
 def load_data():
@@ -65,15 +34,7 @@ def save_data(data):
         json.dump(data, f, indent=2)
 
 def inject_hardcoded_users():
-    data = load_data()
-    updated = False
-    for uid, info in HARDCODED_USERS.items():
-        if uid not in data:
-            data[uid] = info
-            updated = True
-    if updated:
-        save_data(data)
-        print("[INIT] Hardcoded users ditambahkan ke database lokal.")
+    pass  # tidak perlu digunakan jika sudah ambil dari Sheet
 
 def send_to_google_sheet(user_data: dict):
     try:
@@ -83,24 +44,16 @@ def send_to_google_sheet(user_data: dict):
     except requests.exceptions.RequestException as e:
         print(f"[ERROR] Kirim ke Google Sheet gagal: {e}")
 
-def delete_from_google_sheet(user_id):
-    try:
-        response = requests.post(GOOGLE_SHEET_URL, json={"action": "delete", "user_id": user_id})
-        response.raise_for_status()
-        print(f"[SHEET] Data user {user_id} dihapus.")
-    except requests.exceptions.RequestException as e:
-        print(f"[ERROR] Gagal hapus dari Google Sheet: {e}")
-
 def fetch_data_from_sheet():
     try:
         response = requests.get(GOOGLE_SHEET_URL)
         response.raise_for_status()
         data = response.json()
         filtered_data = {
-            uid: info for uid, info in data.items() if info.get("join_time")
+            uid: info for uid, info in data.items() if not info.get("out_time")
         }
         save_data(filtered_data)
-        print("[INFO] Data berhasil diambil dan difilter dari Google Sheet.")
+        print("[INFO] Data dari Sheet disalin ke JSON hanya untuk user aktif.")
     except Exception as e:
         print(f"[ERROR] Gagal ambil data dari Google Sheet: {e}")
 
@@ -171,10 +124,11 @@ async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if user_id in data:
         data[user_id]["out_time"] = datetime.now(timezone.utc).isoformat()
+        send_to_google_sheet(data[user_id])  # kirim status keluar ke Sheet
+        del data[user_id]  # hapus dari JSON
         save_data(data)
-        send_to_google_sheet(data[user_id])
-        print(f"[INFO] User {user_id} keluar, out_time diupdate.")
-        await update.message.reply_text(f"📤 User {user_id} keluar. out_time dicatat.")
+        print(f"[INFO] User {user_id} keluar, data dikirim ke Sheet dan dihapus dari JSON.")
+        await update.message.reply_text(f"🗑️ Data user {user_id} telah dipindahkan ke Sheet dan dihapus dari database lokal.")
 
 async def kick_user(context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
@@ -203,8 +157,9 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
                 await context.bot.unban_chat_member(GROUP_ID, user_id)
                 print(f"[AUTO-KICK] User {user_id} di-kick otomatis.")
-                data[user_id_str]["out_time"] = now.isoformat()
-                send_to_google_sheet(data[user_id_str])
+
+                user_data["out_time"] = now.isoformat()
+                send_to_google_sheet(user_data)  # Kirim status keluar
                 to_delete.append(user_id_str)
         except Exception as e:
             print(f"[ERROR] Gagal proses kick untuk {user_id_str}: {e}")
@@ -239,7 +194,6 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def main():
     fetch_data_from_sheet()
-    inject_hardcoded_users()
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
