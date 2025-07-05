@@ -1,9 +1,10 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
     MessageHandler,
     CommandHandler,
+    CallbackQueryHandler,
     filters,
 )
 import json
@@ -17,7 +18,6 @@ OWNER_ID = 1305881282
 invited_data_file = "invited_users.json"
 GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbxCwh7MjRs-i7cEWkVqYOpZprK7q3PjFX_p0MH5-FyVHXoqlvSJVPP7JiU4TmVzJXdnjA/exec"
 
-# --- Tambahan Data Tetap ---
 HARDCODED_USERS = {
     "7216866087": {
         "username": "Onlyykiaa4",
@@ -53,7 +53,6 @@ HARDCODED_USERS = {
     }
 }
 
-# --- Fungsi utilitas lokal ---
 def load_data():
     try:
         with open(invited_data_file, "r") as f:
@@ -65,7 +64,6 @@ def save_data(data):
     with open(invited_data_file, "w") as f:
         json.dump(data, f, indent=2)
 
-# --- Inject hardcoded users ke file ---
 def inject_hardcoded_users():
     data = load_data()
     updated = False
@@ -77,7 +75,6 @@ def inject_hardcoded_users():
         save_data(data)
         print("[INIT] Hardcoded users ditambahkan ke database lokal.")
 
-# --- Google Sheet ---
 def send_to_google_sheet(user_data: dict):
     try:
         response = requests.post(GOOGLE_SHEET_URL, json=user_data)
@@ -107,7 +104,6 @@ def fetch_data_from_sheet():
     except Exception as e:
         print(f"[ERROR] Gagal ambil data dari Google Sheet: {e}")
 
-# --- Event: User Baru Masuk ---
 async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     for member in update.message.new_chat_members:
@@ -133,7 +129,40 @@ async def new_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 + ("(via link)" if is_via_link else "(diundang oleh owner)")
             )
 
-# --- Event: User Keluar (Kick Manual) ---
+            keyboard = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("24 Jam", callback_data=f"kick:{member.id}:24"),
+                    InlineKeyboardButton("7 Hari", callback_data=f"kick:{member.id}:168"),
+                    InlineKeyboardButton("30 Hari", callback_data=f"kick:{member.id}:720"),
+                ]
+            ])
+            await context.bot.send_message(
+                chat_id=OWNER_ID,
+                text=f"Pilih durasi kick untuk @{member.username or member.first_name}:",
+                reply_markup=keyboard
+            )
+
+async def handle_kick_duration(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data = load_data()
+
+    try:
+        _, user_id, hours = query.data.split(":")
+        user_id = str(user_id)
+        hours = int(hours)
+
+        if user_id in data:
+            join_time = datetime.fromisoformat(data[user_id]["join_time"])
+            kick_time = join_time + timedelta(hours=hours)
+            data[user_id]["kick_at"] = kick_time.isoformat()
+            save_data(data)
+            await query.edit_message_text(f"✅ Kick user ID {user_id} dalam {hours} jam berhasil diset.")
+        else:
+            await query.edit_message_text("❌ User tidak ditemukan di database.")
+    except Exception as e:
+        await query.edit_message_text(f"❌ Terjadi kesalahan: {e}")
+
 async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     left_member = update.message.left_chat_member
@@ -148,13 +177,11 @@ async def user_left(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"[INFO] Data user {user_id} dihapus oleh owner.")
             await update.message.reply_text(f"🗑️ Data user {user_id} dihapus dari database dan Sheet.")
 
-# --- Event: Kick Otomatis Setelah 24 Jam ---
 async def kick_user(context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     now = datetime.now(timezone.utc)
     to_delete = []
 
-    # Ambil daftar admin grup
     try:
         admins = await context.bot.get_chat_administrators(GROUP_ID)
         admin_ids = {admin.user.id for admin in admins}
@@ -163,39 +190,34 @@ async def kick_user(context: ContextTypes.DEFAULT_TYPE):
         admin_ids = set()
 
     for user_id_str, user_data in list(data.items()):
-        try:
-            join_time = datetime.fromisoformat(user_data["join_time"])
-        except Exception as e:
-            print(f"[WARN] Format join_time invalid untuk {user_id_str}: {e}")
+        kick_at_str = user_data.get("kick_at")
+        if not kick_at_str:
             continue
+        try:
+            kick_at = datetime.fromisoformat(kick_at_str)
+            if now >= kick_at:
+                user_id = int(user_id_str)
+                if user_id in admin_ids:
+                    print(f"[SKIP] User {user_id} adalah admin, tidak di-kick.")
+                    continue
 
-        if now - join_time > timedelta(hours=24):
-            user_id = int(user_id_str)
-
-            if user_id in admin_ids:
-                print(f"[SKIP] User {user_id} adalah admin, tidak di-kick.")
-                continue
-
-            try:
                 await context.bot.ban_chat_member(GROUP_ID, user_id)
                 await context.bot.unban_chat_member(GROUP_ID, user_id)
-                print(f"[AUTO-KICK] User {user_id} di-kick otomatis setelah 24 jam.")
+                print(f"[AUTO-KICK] User {user_id} di-kick otomatis.")
                 delete_from_google_sheet(user_id)
                 to_delete.append(user_id_str)
-            except Exception as e:
-                print(f"[ERROR] Gagal kick {user_id}: {e}")
+        except Exception as e:
+            print(f"[ERROR] Gagal proses kick untuk {user_id_str}: {e}")
 
     for uid in to_delete:
         del data[uid]
     save_data(data)
 
-# --- Command: /start ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Bot aktif. Anggota yang bergabung akan dicatat dan di-kick otomatis setelah 24 jam jika tidak diundang oleh owner."
+        "🤖 Bot aktif. Anggota yang bergabung akan dicatat dan bisa diatur untuk di-kick otomatis setelah waktu tertentu."
     )
 
-# --- Command: /cek ---
 async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = load_data()
     if not data:
@@ -204,7 +226,6 @@ async def cek(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = json.dumps(data, indent=2)
     await update.message.reply_text(f"<pre>{text}</pre>", parse_mode="HTML")
 
-# --- Command: /unban <user_id> ---
 async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
         await update.message.reply_text("Gunakan perintah: /unban <user_id>")
@@ -216,7 +237,6 @@ async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.message.reply_text(f"❌ Gagal unban: {e}")
 
-# --- Main Bot Function ---
 async def main():
     fetch_data_from_sheet()
     inject_hardcoded_users()
@@ -228,14 +248,13 @@ async def main():
     app.add_handler(CommandHandler("unban", unban))
     app.add_handler(MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS, new_member))
     app.add_handler(MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER, user_left))
+    app.add_handler(CallbackQueryHandler(handle_kick_duration, pattern="^kick:"))
 
-    # Auto kick job
     app.job_queue.run_repeating(kick_user, interval=60, first=10)
 
     print("🤖 Bot Telegram aktif...")
     await app.run_polling()
 
-# --- Jalankan Program ---
 if __name__ == "__main__":
     import asyncio
     import nest_asyncio
